@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Crystal Bracelet Customization</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 24px;
+    }
+    /* 主要版面：左側放輸入區，右側放「大圓 + 水晶圖片」 */
+    .main-layout {
+      display: flex;
+      align-items: flex-start;
+      gap: 20px;
+      flex-wrap: wrap; /* 使大圓和輸入區在小螢幕上換行 */
+    }
+    /* 輸入區 */
+    .input-area {
+      margin-bottom: 22px;
+      flex: 1 1 200px; /* 確保輸入區能夠在小螢幕上縮放 */
+    }
+    /* 輸入框字體大小設定 */
+    input, select {
+      font-size: 18px;
+    }
+    /* 按鈕字體大小設定 */
+    #generateBtn {
+      font-size: 20px;
+    }
+    /* 大圓容器：寬高在 JS 中動態設定 */
+    #braceletContainer {
+      position: relative;
+      border: 2px solid #ccc;
+      border-radius: 50%;
+      background: #fafafa;
+      box-sizing: border-box;
+      display: inline-block;
+    }
+    /* 小圓 (slot) */
+    .slot {
+      position: absolute;
+      border: 2px dashed #666;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      cursor: pointer;
+      overflow: hidden;
+    }
+    /* slot 中的圖片：自動填滿，並放大2倍 (被裁切) */
+    .slot img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 50%;
+      transform: scale(2);
+      transform-origin: center;
+    }
+    /* 拖曳進 slot 時的提示 */
+    .slot.drag-over {
+      border-color: red;
+      border-style: solid;
+    }
+    /* 右側水晶圖片面板 */
+    #beadPanel {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 20px;
+      width: 80px;
+      position: absolute;
+      left: 65%;
+      top: 0;
+    }
+    #beadPanel img {
+      width: 81px;
+      height: 81px;
+      border: 2px solid transparent;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    #beadPanel img:hover {
+      border-color: #999;
+    }
+
+    /* 手機調整：小螢幕上可以調整大圓的位置和大小 */
+    @media (max-width: 600px) {
+      .main-layout {
+        flex-direction: column;
+        align-items: center;
+      }
+      #braceletContainer {
+        margin: 20px 0;
+        width: 80%;
+        height: auto;
+      }
+      #beadPanel {
+        position: relative;
+        left: 0;
+        top: auto;
+        margin-top: 0;
+        display: flex;
+        justify-content: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<div class="main-layout">
+  <!-- 左側：輸入區 -->
+  <div>
+    <div class="input-area">
+      <!-- 小圓數量 -->
+      <label for="smallCircleSelect">Crystal Size</label>
+      <select id="smallCircleSelect">
+        <option value="6">6</option>
+        <option value="8">8</option>
+        <option value="10">10</option>
+        <option value="12" selected>12</option>
+      </select>
+      <br><br>
+      
+      <!-- 大圓尺寸 (14 ~ 20, step=0.5) -->
+      <label for="bigCircleSize">Hand Size(14-20, gap=0.5)</label>
+      <input type="number" id="bigCircleSize" value="16" step="0.5" min="14" max="20">
+      <br><br>
+      
+      <button id="generateBtn">Enter</button>
+    </div>
+  </div>
+  
+  <!-- 右側：大圓容器 + 水晶圖片面板 -->
+  <div>
+    <div id="braceletContainer"></div>
+    <!-- 水晶圖片按鈕面板移到大圓右邊 -->
+    <div id="beadPanel">
+      <img src="garnet.png" alt="紅石榴" draggable="true">
+      <img src="red_agate.png" alt="紅瑪瑙" draggable="true">
+      <img src="red_hair_quartz.png" alt="紅髮晶" draggable="true">
+    </div>
+  </div>
+</div>
+
+<script>
+let selectedImageSrc = null;
+let slots = [];
+
+/* 放大倍數：2.25... */
+const scaleFactor = 2.25;  // 這裡示範放大2.25倍
+  
+document.addEventListener('DOMContentLoaded', () => {
+  document.getElementById('generateBtn').addEventListener('click', generateBracelet);
+  
+  const beadPanel = document.getElementById('beadPanel');
+  beadPanel.addEventListener('click', onBeadPanelClick);
+  beadPanel.addEventListener('dragstart', onBeadDragStart);
+
+  // 預設生成一次
+  generateBracelet();
+});
+
+function generateBracelet() {
+  const smallCircleSize = parseInt(document.getElementById('smallCircleSelect').value, 10) || 12;
+  let bigCircleInput = parseFloat(document.getElementById('bigCircleSize').value);
+  if (isNaN(bigCircleInput) || bigCircleInput < 14 || bigCircleInput > 20) {
+    bigCircleInput = 16;
+  }
+  const bigCircleDiameter = bigCircleInput * 10 * scaleFactor;
+
+  // 根據大圓尺寸計算小圓數量
+  const n = Math.floor((bigCircleInput * 10) / smallCircleSize);
+
+  const container = document.getElementById('braceletContainer');
+  container.style.width = bigCircleDiameter + 'px';
+  container.style.height = bigCircleDiameter + 'px';
+  container.innerHTML = '';
+  slots = [];
+
+  const R_big = bigCircleDiameter / 2;
+  const sinPart = Math.sin(Math.PI / n);
+  const r = (R_big * sinPart) / (1 + sinPart);
+  const diameter = 2 * r;
+  
+  const R_center = R_big - r;
+
+  for (let i = 0; i < n; i++) {
+    const angleDeg = -90 + (360 / n) * i;
+    const angleRad = angleDeg * Math.PI / 180;
+    const cx = R_big + R_center * Math.cos(angleRad);
+    const cy = R_big + R_center * Math.sin(angleRad);
+
+    const slot = document.createElement('div');
+    slot.classList.add('slot');
+    slot.style.width = diameter + 'px';
+    slot.style.height = diameter + 'px';
+    slot.style.left = cx + 'px';
+    slot.style.top = cy + 'px';
+    
+    slot.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      slot.classList.add('drag-over');
+    });
+    slot.addEventListener('dragleave', () => {
+      slot.classList.remove('drag-over');
+    });
+    slot.addEventListener('drop', (e) => {
+      e.preventDefault();
+      slot.classList.remove('drag-over');
+      if (!slot.hasAttribute('data-filled')) {
+        const imgSrc = e.dataTransfer.getData('text/plain');
+        if (imgSrc) {
+          fillSlot(slot, imgSrc);
+        }
+      }
+    });
+    
+    slot.addEventListener('click', () => {
+      if (slot.hasAttribute('data-filled')) {
+        slot.removeAttribute('data-filled');
+        slot.innerHTML = '';
+        slot.style.border = '2px dashed #666';
+      } else if (selectedImageSrc) {
+        fillSlot(slot, selectedImageSrc);
+      }
+    });
+
+    container.appendChild(slot);
+    slots.push(slot);
+  }
+  
+  console.log(`n=${n}, 大圓輸入:${bigCircleInput}, 實際直徑=${bigCircleDiameter}px, 小圓直徑=${diameter}px`);
+}
+
+function onBeadPanelClick(e) {
+  if (e.target.tagName.toLowerCase() === 'img') {
+    selectedImageSrc = e.target.src;
+    console.log('選取了圖片：', selectedImageSrc);
+  }
+}
+
+function onBeadDragStart(e) {
+  if (e.target.tagName.toLowerCase() === 'img') {
+    e.dataTransfer.setData('text/plain', e.target.src);
+  }
+}
+
+function fillSlot(slot, imgSrc) {
+  const img = document.createElement('img');
+  img.src = imgSrc;
+  slot.appendChild(img);
+  slot.setAttribute('data-filled', 'true');
+  slot.style.border = 'none';
+}
+</script>
+
+</body>
+</html>
